@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Video Compressor: VideoFit</string>
+    <string name="brand">VideoFit</string>
+    <string name="developer">F7 Developer</string>
+
+    <string name="home_headline">Any video.\nAny size.</string>
+    <string name="home_sub">Compress offline to an exact target in MB. Nothing leaves your phone.</string>
+    <string name="select_videos">Select videos</string>
+    <string name="target_size">Target size</string>
+    <string name="custom_size">Custom size</string>
+    <string name="compress">Compress</string>
+    <string name="compress_n">Compress %1$d videos</string>
+    <string name="cancel">Cancel</string>
+    <string name="keep_screen_on">Keep screen on</string>
+
+    <string name="preset_whatsapp">WhatsApp</string>
+    <string name="preset_email">Email</string>
+    <string name="preset_instagram">Instagram</string>
+    <string name="preset_discord">Discord</string>
+    <string name="preset_twitter">X / Twitter</string>
+    <string name="preset_custom">Custom</string>
+
+    <string name="codec_h264">H.264</string>
+    <string name="codec_h265">H.265</string>
+
+    <string name="status_compressing">Compressing</string>
+    <string name="status_done">Done</string>
+    <string name="status_queued">Queued</string>
+    <string name="status_failed">Failed</string>
+    <string name="status_cancelled">Cancelled</string>
+
+    <string name="notification_channel_name">Compression progress</string>
+    <string name="notification_channel_desc">Shows progress while a video is being compressed.</string>
+
+    <string name="privacy_note">100% on-device. No uploads, no servers, no accounts.</string>
+    <string name="pro_title">VideoFit Pro</string>
+    <string name="pro_body">Unlock H.265 encoding, 4K output, unlimited batch and the quality report.</string>
+</resources>

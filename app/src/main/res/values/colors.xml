@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="vf_background">#FF0B0D10</color>
+    <color name="vf_surface">#FF14181D</color>
+    <color name="vf_accent">#FFB6F36A</color>
+    <color name="vf_accent_dark">#FF8FCC3F</color>
+    <color name="vf_on_dark">#FFF3F6F1</color>
+    <color name="vf_black">#FF000000</color>
+</resources>

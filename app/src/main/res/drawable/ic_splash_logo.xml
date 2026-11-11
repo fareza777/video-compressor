@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Splash mark: centred, safely inside the system mask. -->
+    <path
+        android:pathData="M34,32h40a7,7 0,0 1,7 7v30a7,7 0,0 1,-7 7H34a7,7 0,0 1,-7 -7V39a7,7 0,0 1,7 -7z"
+        android:strokeWidth="4"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:endX="81"
+                android:endY="76"
+                android:startX="27"
+                android:startY="32"
+                android:type="linear">
+                <item
+                    android:color="#FFE4FFB8"
+                    android:offset="0" />
+                <item
+                    android:color="#FF97D247"
+                    android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M42,40L54,50L66,40"
+        android:strokeWidth="6.5"
+        android:strokeColor="#FFB6F36A"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M42,68L54,58L66,68"
+        android:strokeWidth="6.5"
+        android:strokeColor="#FF7BE0C3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

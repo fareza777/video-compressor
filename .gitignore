@@ -1,0 +1,20 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local signing material must never be committed.
+keystore.properties
+*.jks
+*.keystore
+
+# Reference implementation clone (https://github.com/YKLovePython/halfsize, MIT)
+.reference/
+
+# Local test fixtures
+fixtures/
