@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- No INTERNET permission: all compression happens on the device. -->
+    <!-- Compression itself is fully on-device. INTERNET is required only by
+         the ad SDK; no video, filename or pixel ever leaves the phone. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Keeps the encode alive while the screen is off. Never held for long. -->
@@ -70,6 +73,11 @@
         <meta-data
             android:name="android.app.shortcuts"
             android:resource="@xml/shortcuts" />
+
+        <!-- AdMob application id (Google test id until replaced). -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}" />
     </application>
 
 </manifest>

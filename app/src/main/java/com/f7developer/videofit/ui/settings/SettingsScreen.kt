@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.f7developer.videofit.BuildConfig
 import com.f7developer.videofit.VideoFitApp
 import com.f7developer.videofit.core.data.Settings
+import com.f7developer.videofit.core.data.ThemeMode
 import com.f7developer.videofit.core.model.VideoCodec
 import com.f7developer.videofit.ui.components.LabeledSwitch
 import com.f7developer.videofit.ui.components.Pill
@@ -37,12 +38,20 @@ import com.f7developer.videofit.ui.components.VFCard
 import com.f7developer.videofit.ui.theme.Space
 import com.f7developer.videofit.ui.theme.VF
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onOpenPaywall: () -> Unit) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onOpenRemoveAds: () -> Unit,
+    onReplayIntro: () -> Unit = {},
+) {
     val app = LocalContext.current.applicationContext as VideoFitApp
     val settings by app.settings.settings.collectAsStateWithLifecycle(initialValue = Settings())
     val scope = rememberCoroutineScope()
+    val adFree = settings.adFreeUntilMs > System.currentTimeMillis()
 
     Box(
         Modifier
@@ -63,7 +72,43 @@ fun SettingsScreen(onBack: () -> Unit, onOpenPaywall: () -> Unit) {
                     .padding(horizontal = Space.lg),
             ) {
                 Spacer(Modifier.height(Space.md))
-                SectionLabel(text = "Defaults")
+
+                // ---- Appearance -------------------------------------------------
+                SectionLabel(text = "Appearance")
+                Spacer(Modifier.height(Space.sm))
+                VFCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(Space.lg)) {
+                        Text(
+                            "Theme",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = VF.TextPrimary,
+                        )
+                        Spacer(Modifier.height(Space.sm))
+                        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                            ThemeMode.entries.forEach { mode ->
+                                Pill(
+                                    text = when (mode) {
+                                        ThemeMode.LIGHT -> "Light"
+                                        ThemeMode.DARK -> "Dark"
+                                        ThemeMode.SYSTEM -> "System"
+                                    },
+                                    selected = settings.themeMode == mode,
+                                    onClick = { scope.launch { app.settings.setThemeMode(mode) } },
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(Space.sm))
+                        Text(
+                            "Light is the default. System follows your phone's dark mode.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = VF.TextTertiary,
+                        )
+                    }
+                }
+
+                // ---- Compression ------------------------------------------------
+                Spacer(Modifier.height(Space.xl))
+                SectionLabel(text = "Compression defaults")
                 Spacer(Modifier.height(Space.sm))
                 VFCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(Space.lg)) {
@@ -82,40 +127,57 @@ fun SettingsScreen(onBack: () -> Unit, onOpenPaywall: () -> Unit) {
                             Pill(
                                 text = "H.265",
                                 selected = settings.defaultCodec == VideoCodec.HEVC,
-                                onClick = {
-                                    if (settings.proUnlocked) {
-                                        scope.launch { app.settings.setCodec(VideoCodec.HEVC) }
-                                    } else {
-                                        onOpenPaywall()
-                                    }
-                                },
+                                onClick = { scope.launch { app.settings.setCodec(VideoCodec.HEVC) } },
                             )
+                        }
+                        Spacer(Modifier.height(Space.md))
+                        Text(
+                            "Default target",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = VF.TextPrimary,
+                        )
+                        Spacer(Modifier.height(Space.sm))
+                        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                            listOf(8, 16, 25, 50).forEach { mb ->
+                                val bytes = mb * 1_000_000L
+                                Pill(
+                                    text = "$mb MB",
+                                    selected = settings.defaultTargetBytes == bytes,
+                                    onClick = {
+                                        scope.launch {
+                                            app.settings.setDefaultTargetBytes(
+                                                if (settings.defaultTargetBytes == bytes) 0L else bytes,
+                                            )
+                                        }
+                                    },
+                                )
+                            }
                         }
                         Spacer(Modifier.height(Space.lg))
                         LabeledSwitch(
-                            title = "Quality report after encoding",
-                            subtitle = "Measures SSIM against the source (Pro)",
-                            checked = settings.measureQuality,
-                            enabled = settings.proUnlocked,
-                            onCheckedChange = { scope.launch { app.settings.setMeasureQuality(it) } },
+                            title = "Downscale to fit",
+                            subtitle = "Lower resolution keeps more detail at small targets",
+                            checked = settings.allowDownscale,
+                            onCheckedChange = { scope.launch { app.settings.setAllowDownscale(it) } },
                         )
                         Spacer(Modifier.height(Space.md))
                         LabeledSwitch(
-                            title = "Keep original file",
-                            subtitle = "Never modify what you picked",
-                            checked = settings.keepOriginal,
-                            onCheckedChange = { scope.launch { app.settings.setKeepOriginal(it) } },
+                            title = "Quality report",
+                            subtitle = "Measure SSIM against the source after encoding",
+                            checked = settings.measureQuality,
+                            onCheckedChange = { scope.launch { app.settings.setMeasureQuality(it) } },
                         )
                     }
                 }
 
+                // ---- Ads --------------------------------------------------------
                 Spacer(Modifier.height(Space.xl))
-                SectionLabel(text = "Plan")
+                SectionLabel(text = "Ads")
                 Spacer(Modifier.height(Space.sm))
                 VFCard(
                     Modifier
                         .fillMaxWidth()
-                        .clickable(onClick = onOpenPaywall),
+                        .clickable(onClick = onOpenRemoveAds),
                 ) {
                     Row(
                         Modifier
@@ -125,29 +187,39 @@ fun SettingsScreen(onBack: () -> Unit, onOpenPaywall: () -> Unit) {
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                if (settings.proUnlocked) "VideoFit Pro active" else "VideoFit Pro",
+                                when {
+                                    settings.adsRemoved -> "Ads removed"
+                                    adFree -> "Ad-free active"
+                                    else -> "Remove ads"
+                                },
                                 style = MaterialTheme.typography.titleMedium,
                                 color = VF.TextPrimary,
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(
-                                if (settings.proUnlocked) {
-                                    "H.265, 4K output, unlimited batch and quality reports unlocked."
-                                } else {
-                                    "H.265, 4K output, unlimited batch and quality reports."
+                                when {
+                                    settings.adsRemoved -> "One-time purchase, restored with your Play account."
+                                    adFree -> "Until " + SimpleDateFormat("d MMM, HH:mm", Locale.getDefault())
+                                        .format(Date(settings.adFreeUntilMs))
+                                    else -> "One-time \$4.99 · no subscription"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = VF.TextTertiary,
                             )
                         }
                         Text(
-                            if (settings.proUnlocked) "Active" else "Upgrade",
+                            when {
+                                settings.adsRemoved -> "Active"
+                                adFree -> "24 h"
+                                else -> "Open"
+                            },
                             style = MaterialTheme.typography.labelLarge,
                             color = VF.Accent,
                         )
                     }
                 }
 
+                // ---- About ------------------------------------------------------
                 Spacer(Modifier.height(Space.xl))
                 SectionLabel(text = "About")
                 Spacer(Modifier.height(Space.sm))
@@ -157,9 +229,28 @@ fun SettingsScreen(onBack: () -> Unit, onOpenPaywall: () -> Unit) {
                         AboutRow("Developer", "F7 Developer")
                         AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                         AboutRow("Compressions", settings.compressionCount.toString())
-                        Spacer(Modifier.height(Space.md))
+                        Spacer(Modifier.height(Space.sm))
                         Text(
-                            "Everything runs on your phone. VideoFit has no internet permission, no account, no analytics and no ads.",
+                            "Show intro again",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = VF.Accent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = onReplayIntro)
+                                .padding(vertical = Space.sm),
+                        )
+                        Text(
+                            "Reset compression defaults",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = VF.TextSecondary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { scope.launch { app.settings.resetCompressionDefaults() } }
+                                .padding(vertical = Space.sm),
+                        )
+                        Spacer(Modifier.height(Space.sm))
+                        Text(
+                            "Compression runs on your phone. The ad SDK needs the network; your videos, file names and pixels are never uploaded.",
                             style = MaterialTheme.typography.bodySmall,
                             color = VF.TextSecondary,
                         )

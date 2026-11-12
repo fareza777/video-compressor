@@ -4,10 +4,13 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.f7developer.videofit.core.data.ThemeMode
 import com.f7developer.videofit.ui.AppNav
 import com.f7developer.videofit.ui.theme.VideoFitTheme
 
@@ -19,12 +22,22 @@ class MainActivity : ComponentActivity() {
         // Transparent bars: the app draws its own gradient behind them, so the
         // default edge-to-edge scrim would leave a visible band under the status bar.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+            ),
         )
         val incoming = extractVideoUris(intent)
+        val app = application as VideoFitApp
+
         setContent {
-            VideoFitTheme {
+            val settings by app.settings.settings.collectAsStateWithLifecycle(initialValue = null)
+            // Light is the default until the stored preference arrives.
+            VideoFitTheme(mode = settings?.themeMode ?: ThemeMode.LIGHT) {
                 AppNav(incomingUris = incoming)
             }
         }

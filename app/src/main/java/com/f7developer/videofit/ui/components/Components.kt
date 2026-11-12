@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Movie
@@ -245,7 +246,7 @@ fun TopBar(
         if (onBack != null) {
             IconButton(onClick = onBack) {
                 Icon(
-                    androidx.compose.material.icons.Icons.Rounded.ArrowForward,
+                    Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "Back",
                     tint = VF.TextPrimary,
                     modifier = Modifier.size(20.dp),
@@ -274,16 +275,18 @@ fun VideoThumbnail(
     val bitmap by produceState<Bitmap?>(initialValue = null, uri) {
         value = withContext(Dispatchers.IO) {
             runCatching {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                    context.contentResolver.loadThumbnail(uri, Size(320, 180), null)
-                } else {
-                    val retriever = android.media.MediaMetadataRetriever()
-                    try {
+                val retriever = android.media.MediaMetadataRetriever()
+                try {
+                    // file:// outputs from the library are not readable through
+                    // loadThumbnail, so go straight to the decoder for those.
+                    if (uri.scheme == "file") {
+                        retriever.setDataSource(uri.path)
+                    } else {
                         retriever.setDataSource(context, uri)
-                        retriever.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                    } finally {
-                        runCatching { retriever.release() }
                     }
+                    retriever.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                } finally {
+                    runCatching { retriever.release() }
                 }
             }.getOrNull()
         }
@@ -326,6 +329,11 @@ fun ProgressRing(
         animationSpec = tween(400),
         label = "ring",
     )
+    // Resolve theme colours here: DrawScope is not a composable scope.
+    val accent = VF.Accent
+    val success = VF.Success
+    val outline = VF.Outline
+    val background = VF.Background
     Box(modifier = modifier.size(size.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier
@@ -333,22 +341,22 @@ fun ProgressRing(
                 .clip(CircleShape)
                 .background(
                     Brush.sweepGradient(
-                        listOf(VF.Accent, VF.Success, VF.Accent),
-                    ).let { it },
+                        listOf(accent, success, accent),
+                    ),
                 )
                 .padding(stroke.dp)
                 .clip(CircleShape)
-                .background(VF.Background),
+                .background(background),
         )
         androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
             val strokeWidth = stroke.dp.toPx()
             drawCircle(
-                color = VF.Outline,
+                color = outline,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(strokeWidth),
                 radius = this.size.minDimension / 2 - strokeWidth / 2,
             )
             drawArc(
-                color = VF.Accent,
+                color = accent,
                 startAngle = -90f,
                 sweepAngle = 360f * animated,
                 useCenter = false,

@@ -32,7 +32,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
@@ -54,7 +55,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.f7developer.videofit.core.ads.BannerAdSlot
 import com.f7developer.videofit.core.model.EncodePlan
 import com.f7developer.videofit.core.model.VideoCodec
 import com.f7developer.videofit.core.util.Format
@@ -75,13 +76,15 @@ import com.f7developer.videofit.ui.theme.VF
 import java.util.Locale
 
 /**
- * One screen, no hunting: pick, choose a size, compress. The advanced switches
- * stay collapsed so the whole flow fits on a phone without scrolling.
+ * One screen, no hunting: pick, choose a size, compress. Everything is
+ * unlocked. The banner sits below the primary button inside the layout, so it
+ * can never cover the app's own controls or the system navigation bar.
  */
 @Composable
 fun HomeScreen(
     onOpenSettings: () -> Unit,
-    onOpenPaywall: () -> Unit,
+    onOpenLibrary: () -> Unit,
+    onOpenHistory: () -> Unit,
     onStart: () -> Unit,
     incomingUris: List<android.net.Uri> = emptyList(),
     viewModel: HomeViewModel = viewModel(),
@@ -89,7 +92,7 @@ fun HomeScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var advanced by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10),
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 20),
     ) { uris -> viewModel.addUris(uris) }
 
     LaunchedEffect(incomingUris) {
@@ -100,8 +103,9 @@ fun HomeScreen(
     val launchPicker = {
         picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
     }
+    val count = state.picks.count { it.info != null }
 
-    Box(
+    Column(
         Modifier
             .fillMaxSize()
             .background(
@@ -110,32 +114,35 @@ fun HomeScreen(
                     0.4f to VF.Background,
                     1f to VF.Background,
                 ),
-            ),
+            )
+            .statusBarsPadding(),
     ) {
         Column(
             Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = Space.lg)
-                .padding(bottom = 104.dp),
+                .padding(horizontal = Space.lg),
         ) {
-            HeaderRow(onOpenSettings = onOpenSettings)
+            HeaderRow(
+                onOpenSettings = onOpenSettings,
+                onOpenLibrary = onOpenLibrary,
+                onOpenHistory = onOpenHistory,
+            )
             Spacer(Modifier.height(Space.sm))
 
             Text(
-                text = "Compress any video",
+                text = "Any video.",
                 style = MaterialTheme.typography.displayLarge,
                 color = VF.TextPrimary,
             )
             Text(
-                text = "to any size.",
+                text = "Any size.",
                 style = MaterialTheme.typography.displayLarge,
                 color = VF.Accent,
             )
             Spacer(Modifier.height(Space.xs))
             Text(
-                text = "Offline · hardware encoded · nothing leaves your phone",
+                text = "Compress to any target size — offline.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = VF.TextSecondary,
             )
@@ -159,51 +166,49 @@ fun HomeScreen(
                 state = state,
                 advanced = advanced,
                 onToggleAdvanced = { advanced = !advanced },
-                onCodec = { codec ->
-                    if (codec == VideoCodec.HEVC && !state.proUnlocked) onOpenPaywall()
-                    else viewModel.setCodec(codec)
-                },
+                onCodec = viewModel::setCodec,
                 onToggleDownscale = viewModel::toggleDownscale,
                 onToggleQuality = viewModel::toggleQualityReport,
-                onOpenPaywall = onOpenPaywall,
             )
 
             if (plan != null) {
                 Spacer(Modifier.height(Space.md))
                 PlanStrip(plan = plan)
             }
-
-            if (state.picks.isEmpty()) {
-                Spacer(Modifier.height(Space.xl))
-                StepsHint()
-            }
-
-            if (state.batchLimitHit) {
-                Spacer(Modifier.height(Space.sm))
-                Text(
-                    text = "Free plan: 3 videos per batch. Tap to unlock unlimited.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = VF.Warning,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(onClick = onOpenPaywall)
-                        .padding(vertical = Space.sm),
-                )
-            }
+            Spacer(Modifier.height(Space.lg))
         }
 
-        BottomCta(
-            state = state,
-            onSelect = launchPicker,
-            onCompress = { viewModel.startCompression(onStart) },
-            onOpenPaywall = onOpenPaywall,
-        )
+        // Bottom block: CTA first, banner underneath. Both are in the layout,
+        // so neither overlaps content and the banner clears the nav bar.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(VF.Background)
+                .navigationBarsPadding(),
+        ) {
+            AccentButton(
+                text = when (count) {
+                    0 -> "Select videos"
+                    1 -> "Compress video"
+                    else -> "Compress $count videos"
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Space.lg, vertical = Space.sm),
+                enabled = state.picks.isEmpty() || state.ready,
+                onClick = { if (count == 0) launchPicker() else viewModel.startCompression(onStart) },
+            )
+            BannerAdSlot()
+        }
     }
 }
 
 @Composable
-private fun HeaderRow(onOpenSettings: () -> Unit) {
+private fun HeaderRow(
+    onOpenSettings: () -> Unit,
+    onOpenLibrary: () -> Unit,
+    onOpenHistory: () -> Unit,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -232,6 +237,20 @@ private fun HeaderRow(onOpenSettings: () -> Unit) {
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.weight(1f))
+        IconButton(onClick = onOpenLibrary) {
+            Icon(
+                Icons.Rounded.PhotoLibrary,
+                contentDescription = "Library",
+                tint = VF.TextSecondary,
+            )
+        }
+        IconButton(onClick = onOpenHistory) {
+            Icon(
+                Icons.Rounded.History,
+                contentDescription = "History",
+                tint = VF.TextSecondary,
+            )
+        }
         IconButton(onClick = onOpenSettings) {
             Icon(
                 Icons.Rounded.Settings,
@@ -267,7 +286,7 @@ private fun TargetCard(state: HomeUiState, viewModel: HomeViewModel) {
                 Text(
                     "MB",
                     style = MaterialTheme.typography.titleLarge,
-                    color = VF.Accent.copy(alpha = 0.55f),
+                    color = VF.Accent.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 10.dp),
                 )
                 Spacer(Modifier.weight(1f))
@@ -279,21 +298,11 @@ private fun TargetCard(state: HomeUiState, viewModel: HomeViewModel) {
                 )
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(Space.sm),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = Space.xs)
-                    .horizontalScroll(rememberScrollState()),
-            ) {
-                state.presets.forEach { preset ->
-                    Pill(
-                        text = preset.label,
-                        selected = state.activePresetId == preset.id,
-                        onClick = { viewModel.selectPreset(preset) },
-                    )
-                }
-            }
+            PresetChips(
+                state = state,
+                onPreset = viewModel::selectPreset,
+                onCustom = { viewModel.setTargetMegabytes(sliderValue) },
+            )
 
             Slider(
                 value = sliderValue.toFloat(),
@@ -332,6 +341,35 @@ private fun TargetCard(state: HomeUiState, viewModel: HomeViewModel) {
                 ),
             )
         }
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun PresetChips(
+    state: HomeUiState,
+    onPreset: (com.f7developer.videofit.core.model.SizePreset) -> Unit,
+    onCustom: () -> Unit,
+) {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = Space.xs),
+        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+        verticalArrangement = Arrangement.spacedBy(Space.sm),
+    ) {
+        state.presets.forEach { preset ->
+            Pill(
+                text = preset.label,
+                selected = state.activePresetId == preset.id,
+                onClick = { onPreset(preset) },
+            )
+        }
+        Pill(
+            text = "Custom",
+            selected = state.activePresetId == "custom",
+            onClick = onCustom,
+        )
     }
 }
 
@@ -444,7 +482,6 @@ private fun EncodeRow(
     onCodec: (VideoCodec) -> Unit,
     onToggleDownscale: () -> Unit,
     onToggleQuality: () -> Unit,
-    onOpenPaywall: () -> Unit,
 ) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -462,7 +499,6 @@ private fun EncodeRow(
                 Pill(
                     text = "H.265 · smaller",
                     selected = state.codec == VideoCodec.HEVC,
-                    locked = !state.proUnlocked,
                     onClick = { onCodec(VideoCodec.HEVC) },
                 )
             }
@@ -505,27 +541,8 @@ private fun EncodeRow(
                         title = "Quality report",
                         subtitle = "SSIM check after encoding",
                         checked = state.measureQuality,
-                        enabled = state.proUnlocked,
                         onCheckedChange = { onToggleQuality() },
                     )
-                    if (!state.proUnlocked) {
-                        Spacer(Modifier.height(Space.sm))
-                        Row(
-                            Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable(onClick = onOpenPaywall)
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(Icons.Rounded.Lock, null, tint = VF.AccentDim, modifier = Modifier.size(15.dp))
-                            Spacer(Modifier.width(Space.xs))
-                            Text(
-                                "Pro unlocks H.265, 4K and unlimited batch",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = VF.AccentDim,
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -562,47 +579,8 @@ private fun PlanStrip(plan: EncodePlan) {
         )
         if (plan.warnings.isNotEmpty()) {
             Spacer(Modifier.width(Space.sm))
-            Text(
-                "!",
-                style = MaterialTheme.typography.labelLarge,
-                color = VF.Warning,
-            )
+            Text("!", style = MaterialTheme.typography.labelLarge, color = VF.Warning)
         }
-    }
-}
-
-@Composable
-private fun StepsHint() {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Step("1", "Pick")
-        Step("2", "Set size")
-        Step("3", "Compress")
-    }
-}
-
-@Composable
-private fun Step(number: String, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(26.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(VF.SurfaceElevated),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                number,
-                style = MaterialTheme.typography.labelMedium,
-                color = VF.Accent,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-        Spacer(Modifier.width(Space.sm))
-        Text(label, style = MaterialTheme.typography.bodySmall, color = VF.TextSecondary)
     }
 }
 
@@ -613,52 +591,4 @@ private fun Dot() {
         style = MaterialTheme.typography.bodyMedium,
         color = VF.TextTertiary,
     )
-}
-
-@Composable
-private fun androidx.compose.foundation.layout.BoxScope.BottomCta(
-    state: HomeUiState,
-    onSelect: () -> Unit,
-    onCompress: () -> Unit,
-    onOpenPaywall: () -> Unit,
-) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .align(Alignment.BottomCenter)
-            .background(Brush.verticalGradient(listOf(Color.Transparent, VF.Background, VF.Background)))
-            .navigationBarsPadding()
-            .padding(horizontal = Space.lg, vertical = Space.md),
-    ) {
-        Column {
-            if (!state.proUnlocked) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(onClick = onOpenPaywall)
-                        .padding(bottom = Space.sm),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Go Pro · H.265, 4K, no batch limit",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = VF.AccentDim,
-                    )
-                }
-            }
-            val count = state.picks.count { it.info != null }
-            AccentButton(
-                text = when (count) {
-                    0 -> "Select videos"
-                    1 -> "Compress video"
-                    else -> "Compress $count videos"
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = state.picks.isEmpty() || state.ready,
-                onClick = { if (count == 0) onSelect() else onCompress() },
-            )
-        }
-    }
 }

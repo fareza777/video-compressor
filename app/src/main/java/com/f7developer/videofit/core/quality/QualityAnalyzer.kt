@@ -62,14 +62,13 @@ class QualityAnalyzer(private val context: Context) {
                 val after = frameAt(outputRetriever, atMs) ?: continue
                 val size = compareSize(before, after)
                 val a = Bitmap.createScaledBitmap(before, size.first, size.second, true)
-                val b = Bitmap.createScaledBitmap(before, size.first, size.second, true)
                 val c = Bitmap.createScaledBitmap(after, size.first, size.second, true)
                 // SSIM needs the same geometry; both are stretched to one grid.
                 val lumaA = luma(a)
                 val lumaB = luma(c)
                 ssims += ssim(lumaA, lumaB, size.first, size.second)
                 psnr(lumaA, lumaB)?.let { psnrs += it }
-                a.recycle(); b.recycle(); c.recycle()
+                a.recycle(); c.recycle()
                 before.recycle(); after.recycle()
             }
         } catch (t: Throwable) {
@@ -99,7 +98,9 @@ class QualityAnalyzer(private val context: Context) {
 
     private fun frameAt(retriever: MediaMetadataRetriever, atMs: Long): Bitmap? =
         runCatching {
-            retriever.getFrameAtTime(atMs * 1000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            // CLOSEST (not CLOSEST_SYNC): two encodes have different keyframe
+            // placement, and comparing different frames reports false quality loss.
+            retriever.getFrameAtTime(atMs * 1000, MediaMetadataRetriever.OPTION_CLOSEST)
         }.getOrNull()
 
     private fun compareSize(a: Bitmap, b: Bitmap): Pair<Int, Int> {

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -14,10 +15,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.f7developer.videofit.VideoFitApp
+import com.f7developer.videofit.core.ads.AdsManager
 import com.f7developer.videofit.core.service.CompressionController
+import com.f7developer.videofit.ui.ads.RemoveAdsScreen
+import com.f7developer.videofit.ui.history.HistoryScreen
 import com.f7developer.videofit.ui.home.HomeScreen
+import com.f7developer.videofit.ui.library.LibraryScreen
 import com.f7developer.videofit.ui.onboarding.OnboardingScreen
-import com.f7developer.videofit.ui.paywall.PaywallScreen
 import com.f7developer.videofit.ui.progress.ProgressScreen
 import com.f7developer.videofit.ui.result.ResultScreen
 import com.f7developer.videofit.ui.settings.SettingsScreen
@@ -29,7 +33,9 @@ private object Routes {
     const val PROGRESS = "progress"
     const val RESULT = "result"
     const val SETTINGS = "settings"
-    const val PAYWALL = "paywall"
+    const val REMOVE_ADS = "remove_ads"
+    const val LIBRARY = "library"
+    const val HISTORY = "history"
 }
 
 @Composable
@@ -48,19 +54,33 @@ fun AppNav(incomingUris: List<Uri> = emptyList()) {
             onFinish = { scope.launch { app.settings.setOnboardingDone(true) } },
         )
 
-        else -> MainNav(incomingUris = incomingUris)
+        else -> MainNav(
+            incomingUris = incomingUris,
+            onReplayIntro = { scope.launch { app.settings.setOnboardingDone(false) } },
+            libraryRepository = app.library,
+            historyRepository = app.history,
+        )
     }
 }
 
 @Composable
-private fun MainNav(incomingUris: List<Uri>) {
+private fun MainNav(
+    incomingUris: List<Uri>,
+    onReplayIntro: () -> Unit,
+    libraryRepository: com.f7developer.videofit.core.data.LibraryRepository,
+    historyRepository: com.f7developer.videofit.core.data.HistoryRepository,
+) {
     val navController = rememberNavController()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) { AdsManager.preloadInterstitial(context) }
 
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeScreen(
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                onOpenPaywall = { navController.navigate(Routes.PAYWALL) },
+                onOpenLibrary = { navController.navigate(Routes.LIBRARY) { launchSingleTop = true } },
+                onOpenHistory = { navController.navigate(Routes.HISTORY) { launchSingleTop = true } },
                 onStart = {
                     navController.navigate(Routes.PROGRESS) { launchSingleTop = true }
                 },
@@ -81,26 +101,39 @@ private fun MainNav(incomingUris: List<Uri>) {
             )
         }
         composable(Routes.RESULT) {
+            val leave: () -> Unit = {
+                AdsManager.maybeShowInterstitial(context) {
+                    CompressionController.reset()
+                    navController.popBackStack(Routes.HOME, inclusive = false)
+                }
+            }
             ResultScreen(
-                onDone = {
-                    CompressionController.reset()
-                    navController.popBackStack(Routes.HOME, inclusive = false)
-                },
-                onCompressAnother = {
-                    CompressionController.reset()
-                    navController.popBackStack(Routes.HOME, inclusive = false)
-                },
-                onOpenPaywall = { navController.navigate(Routes.PAYWALL) },
+                onDone = leave,
+                onCompressAnother = leave,
+                onOpenPaywall = { navController.navigate(Routes.REMOVE_ADS) },
             )
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 onBack = { navController.popBackStack() },
-                onOpenPaywall = { navController.navigate(Routes.PAYWALL) },
+                onOpenRemoveAds = { navController.navigate(Routes.REMOVE_ADS) },
+                onReplayIntro = onReplayIntro,
             )
         }
-        composable(Routes.PAYWALL) {
-            PaywallScreen(onBack = { navController.popBackStack() })
+        composable(Routes.REMOVE_ADS) {
+            RemoveAdsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.LIBRARY) {
+            LibraryScreen(
+                onBack = { navController.popBackStack() },
+                repository = libraryRepository,
+            )
+        }
+        composable(Routes.HISTORY) {
+            HistoryScreen(
+                onBack = { navController.popBackStack() },
+                repository = historyRepository,
+            )
         }
     }
 }

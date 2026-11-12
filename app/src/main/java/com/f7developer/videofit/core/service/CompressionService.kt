@@ -158,6 +158,26 @@ class CompressionService : Service() {
                     )
                     results += result
                     app.settings.recordCompression()
+                    app.history.add(
+                        com.f7developer.videofit.core.data.HistoryEntry(
+                            id = java.util.UUID.randomUUID().toString(),
+                            displayName = result.displayName,
+                            sourceBytes = result.sourceBytes,
+                            outputBytes = result.outputBytes,
+                            targetBytes = result.plan.targetBytes,
+                            codec = result.plan.codec.label,
+                            width = result.plan.width,
+                            height = result.plan.height,
+                            ssim = result.ssim,
+                            verdict = result.verdict.label,
+                            elapsedMs = result.elapsedMs,
+                            at = System.currentTimeMillis(),
+                            skipped = result.skipped,
+                            failed = false,
+                            failure = null,
+                            outputPath = result.outputFile.absolutePath,
+                        ),
+                    )
                     Log.d(TAG, "done ${result.outputFile} ${result.outputBytes}B in ${result.elapsedMs}ms")
                 } catch (t: Throwable) {
                     if (CompressionController.isCancelled()) {
@@ -169,6 +189,26 @@ class CompressionService : Service() {
                         else -> t.message ?: "Compression failed"
                     }
                     failures += "${name.ifBlank { "Video" }}: $message"
+                    app.history.add(
+                        com.f7developer.videofit.core.data.HistoryEntry(
+                            id = java.util.UUID.randomUUID().toString(),
+                            displayName = name.ifBlank { "Video" },
+                            sourceBytes = 0L,
+                            outputBytes = 0L,
+                            targetBytes = targetBytes,
+                            codec = codec.label,
+                            width = 0,
+                            height = 0,
+                            ssim = null,
+                            verdict = "Failed",
+                            elapsedMs = 0L,
+                            at = System.currentTimeMillis(),
+                            skipped = false,
+                            failed = true,
+                            failure = message,
+                            outputPath = null,
+                        ),
+                    )
                     Log.w(TAG, "failed $uriString", t)
                 }
             }

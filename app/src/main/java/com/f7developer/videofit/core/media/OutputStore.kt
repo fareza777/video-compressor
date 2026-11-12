@@ -30,7 +30,9 @@ object OutputStore {
             .trim()
             .ifBlank { "video" }
             .take(48)
-        val size = "${(targetBytes / 1_000_000.0).let { if (it % 1.0 == 0.0) it.toInt().toString() else String.format("%.1f", it) }}mb"
+        // Locale.US so a comma decimal separator never ends up in a file name.
+        val mb = targetBytes / 1_000_000.0
+        val size = "${if (mb % 1.0 == 0.0) mb.toInt().toString() else String.format(java.util.Locale.US, "%.1f", mb)}mb"
         var candidate = File(dir, "${base}_${size}.mp4")
         var index = 1
         while (candidate.exists()) {

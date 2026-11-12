@@ -45,6 +45,8 @@ data class CompressionResult(
     val ssim: Double?,
     val verdict: QualityAnalyzer.Verdict,
     val savedToGallery: Boolean,
+    /** True when the source already fit the target and was copied untouched. */
+    val skipped: Boolean = false,
 ) {
     val savedPercent: Int
         get() = if (sourceBytes <= 0) 0
@@ -88,7 +90,30 @@ class CompressionEngine(private val context: Context) {
     ): CompressionResult = withContext(Dispatchers.IO) {
         val started = System.currentTimeMillis()
         val info = job.info
-        var plan = planFor(info, job.targetBytes, job.codec, job.allowDownscale, job.maxShortSide)
+        val plan = planFor(info, job.targetBytes, job.codec, job.allowDownscale, job.maxShortSide)
+
+        // Already small enough: re-encoding would only add size and lose detail.
+        if (info.sizeBytes in 1 until job.targetBytes) {
+            val output = OutputStore.uniqueOutputFile(context, job.displayName, info.sizeBytes)
+            copySource(job.uri, output)
+            onProgress(1f)
+            return@withContext CompressionResult(
+                displayName = job.displayName,
+                outputFile = output,
+                outputBytes = output.length(),
+                sourceBytes = info.sizeBytes,
+                sourceUriString = job.uri.toString(),
+                elapsedMs = System.currentTimeMillis() - started,
+                attempts = 0,
+                plan = plan,
+                ssim = 1.0,
+                verdict = QualityAnalyzer.Verdict.INDISTINGUISHABLE,
+                savedToGallery = false,
+                skipped = true,
+            )
+        }
+
+        var resizedPlan = plan
         var attempt = 0
         var resultFile: File? = null
         var lastBytes = 0L
@@ -99,14 +124,14 @@ class CompressionEngine(private val context: Context) {
                 OutputStore.tempDirectory(context),
                 "vf_${System.currentTimeMillis()}_$attempt.mp4",
             )
-            lastBytes = encodeOnce(job, plan, temp, onProgress, isCancelled)
+            lastBytes = encodeOnce(job, resizedPlan, temp, onProgress, isCancelled)
             resultFile?.delete()
             resultFile = temp
-            if (lastBytes <= plan.targetBytes * 1.005 || attempt >= 3) break
-            val tightened = CompressionPlanner.tighten(plan, lastBytes, plan.targetBytes)
+            if (lastBytes <= resizedPlan.targetBytes * 1.005 || attempt >= 3) break
+            val tightened = CompressionPlanner.tighten(resizedPlan, lastBytes, resizedPlan.targetBytes)
             if (tightened == null) break
             Log.d(TAG, "overshoot ${lastBytes}B, retrying at $tightened kbps")
-            plan = plan.copy(videoKbps = tightened)
+            resizedPlan = resizedPlan.copy(videoKbps = tightened)
         }
 
         val temp = resultFile ?: throw CompressionException("The encoder produced no output.")
@@ -130,7 +155,7 @@ class CompressionEngine(private val context: Context) {
             sourceUriString = job.uri.toString(),
             elapsedMs = System.currentTimeMillis() - started,
             attempts = attempt,
-            plan = plan,
+            plan = resizedPlan,
             ssim = qualitySample.ssim,
             verdict = qualitySample.verdict,
             savedToGallery = false,
@@ -236,6 +261,14 @@ class CompressionEngine(private val context: Context) {
         }
         onProgress(1f)
         return temp.length()
+    }
+
+    private fun copySource(uri: Uri, destination: File) {
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw CompressionException("Could not read the selected file.")
+        input.use { source ->
+            destination.outputStream().use { out -> source.copyTo(out, 256 * 1024) }
+        }
     }
 
     private fun friendlyMessage(error: Throwable): String {

@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="vf_background">#FF0B0D10</color>
-    <color name="vf_surface">#FF14181D</color>
-    <color name="vf_accent">#FFB6F36A</color>
-    <color name="vf_accent_dark">#FF8FCC3F</color>
-    <color name="vf_on_dark">#FFF3F6F1</color>
+    <!-- Light is the default theme, so the window and splash start light. -->
+    <color name="vf_background">#FFF4F6F0</color>
+    <color name="vf_surface">#FFFFFFFF</color>
+    <color name="vf_accent">#FF4F8A12</color>
+    <color name="vf_accent_dark">#FF3C6B0E</color>
+    <color name="vf_on_dark">#FF12180F</color>
     <color name="vf_black">#FF000000</color>
 </resources>

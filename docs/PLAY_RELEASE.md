@@ -192,3 +192,26 @@ check, which would break the "no server" promise.
 `versionCode` increments by 1 per upload. Keep `versionName` semantic
 (`1.0.0` → `1.0.1` for fixes, `1.1.0` for features). Release notes are written
 in the Play Console per track, in English.
+
+## Ads and the remove-ads product
+
+Everything in the app is unlocked. Revenue comes from ads plus a one-time
+"remove ads" purchase.
+
+* AdMob ids live in `app/build.gradle.kts`:
+  `manifestPlaceholders["admobAppId"]` (also injected into the manifest),
+  `ADMOB_BANNER_ID`, `ADMOB_INTERSTITIAL_ID`, `ADMOB_REWARDED_ID`.
+  They currently point at **Google's official test units**. Replace all four with
+  the ids from your AdMob account before publishing — test ids never earn.
+* Create the product in Play Console → Monetize → Products → In-app products:
+  id `remove_ads`, type one-time, price **$4.99**. The app shows the localized
+  Play price and falls back to "$4.99" when the store is unreachable.
+* Purchases are acknowledged in `BillingManager` and stored as `ads_removed` in
+  DataStore. `restore()` re-queries owned purchases, so reinstalls and other
+  devices restore the entitlement.
+* Rewarded ads grant 24 hours without banners (`ad_free_until`), independent of
+  the purchase.
+* The banner is rendered inside the home layout below the primary button, never
+  as an overlay, so it cannot cover app controls or the system navigation bar.
+* `INTERNET` and `ACCESS_NETWORK_STATE` are declared for the ad SDK only.
+  Compressed videos, file names and pixels never leave the device.

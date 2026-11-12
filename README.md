@@ -72,19 +72,41 @@ git-ignored). Without them the release build is unsigned.
 
 ## Privacy
 
-The app declares **no `INTERNET` permission**. There is no analytics, no ads, no
-account and no server. Videos are picked through the system photo picker and
-processed on-device; results go to app-specific storage and optionally the
-gallery via MediaStore.
+Compression is fully on-device: videos are picked through the system photo
+picker, processed by the phone's codecs, and written to app-specific storage
+(optionally the gallery via MediaStore). The only network use is the AdMob SDK
+that renders the banner, interstitial and rewarded ads — no video, file name or
+pixel is ever uploaded. No account, no analytics.
 
 ## Monetization
 
-Freemium without a backend: free gives unlimited compressions, any target size,
-full H.264 quality and up to 1080p output. Pro (one-time purchase) unlocks H.265,
-above-1080p output, unlimited batch and the quality report. The entitlement is a
-single DataStore boolean (`ProRepository.unlockPro()`), designed to be flipped by
-Play Billing acknowledgement. Steps are in
-[`docs/PLAY_RELEASE.md`](docs/PLAY_RELEASE.md).
+Everything in the app is unlocked for every user: any target size, H.264 and
+H.265, 4K output, unlimited batch and the quality report.
+
+Ads pay for it: an AdMob banner under the primary button on the home screen
+(inside the layout, so it never covers a control or the system navigation bar),
+an interstitial after a finished compression (90 s cooldown), and a rewarded ad
+that grants 24 hours without banners.
+
+**Remove ads** is a one-time $4.99 in-app purchase (`remove_ads`) handled by Play
+Billing 7: acknowledged client-side, stored as a DataStore flag, and restored on
+reinstall through `queryPurchasesAsync`. Ad unit ids and the product id live in
+`app/build.gradle.kts`; they point at Google's test units until real ones are
+added — see [`docs/PLAY_RELEASE.md`](docs/PLAY_RELEASE.md).
+
+## Library and history
+
+* **Library** (`ui/library/LibraryScreen.kt`) lists every compressed file with a
+  real thumbnail, size, resolution, duration and date. Search, sort by
+  newest/largest/smallest/name, play in place, share, save to the gallery or
+  delete — plus "save all to gallery" and a storage total.
+* **History** (`ui/history/HistoryScreen.kt`) records every run in
+  `history.json` (capped at 300 entries): before/after size, target, codec,
+  resolution, SSIM, duration, timestamp and failures. It shows total bytes saved,
+  run count, average saving, last run, search and All/Success/Skipped/Failed
+  filters, and can clear itself without touching the video files.
+* **Theme** — Light (default) / Dark / System, switchable live in Settings, with
+  matching splash colours from `values/` and `values-night/`.
 
 ## Open-source notice
 

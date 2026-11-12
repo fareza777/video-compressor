@@ -24,6 +24,13 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+
+        // Google's official test app id until a real AdMob account is linked.
+        manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
+        buildConfigField("String", "ADMOB_BANNER_ID", "\"ca-app-pub-3940256099942544/9214589741\"")
+        buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"ca-app-pub-3940256099942544/1033173712\"")
+        buildConfigField("String", "ADMOB_REWARDED_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
+        buildConfigField("String", "REMOVE_ADS_PRODUCT_ID", "\"remove_ads\"")
     }
 
     signingConfigs {
@@ -101,6 +108,11 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
+
+    // Monetisation: AdMob for banner/interstitial/rewarded, Play Billing for the
+    // one-time "remove ads" product.
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

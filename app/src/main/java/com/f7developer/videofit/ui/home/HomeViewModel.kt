@@ -33,10 +33,6 @@ data class HomeUiState(
     val codec: VideoCodec = VideoCodec.H264,
     val allowDownscale: Boolean = true,
     val measureQuality: Boolean = true,
-    val proUnlocked: Boolean = false,
-    val maxShortSide: Int? = 1080,
-    val maxBatch: Int = 3,
-    val batchLimitHit: Boolean = false,
     val probing: Boolean = false,
     val started: Boolean = false,
 ) {
@@ -54,27 +50,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     init {
         viewModelScope.launch {
             val stored = videoFit.settings.settings.first()
+            val presetBytes = Presets.ALL.firstOrNull { it.id == stored.defaultPresetId }?.bytes
+                ?: Presets.WHATSAPP.bytes
             _state.update {
                 it.copy(
                     codec = stored.defaultCodec,
                     activePresetId = stored.defaultPresetId,
-                    targetBytes = Presets.ALL.firstOrNull { p -> p.id == stored.defaultPresetId }?.bytes
-                        ?: Presets.WHATSAPP.bytes,
+                    targetBytes = if (stored.defaultTargetBytes > 0) stored.defaultTargetBytes else presetBytes,
+                    allowDownscale = stored.allowDownscale,
+                    measureQuality = stored.measureQuality,
                 )
-            }
-        }
-        viewModelScope.launch {
-            videoFit.settings.settings.collect { stored ->
-                val limits = videoFit.pro.limits(stored)
-                _state.update {
-                    it.copy(
-                        proUnlocked = stored.proUnlocked,
-                        maxShortSide = limits.maxShortSide,
-                        maxBatch = limits.maxBatch,
-                        codec = if (!limits.allowHevc && it.codec == VideoCodec.HEVC) VideoCodec.H264 else it.codec,
-                        measureQuality = if (limits.allowQualityReport) it.measureQuality else false,
-                    )
-                }
             }
         }
     }
@@ -82,19 +67,13 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun addUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
         val current = _state.value
-        val room = (current.maxBatch - current.picks.size).coerceAtLeast(0)
         val accepted = uris.distinctBy { it.toString() }
             .filter { uri -> current.picks.none { it.uri.toString() == uri.toString() } }
-        val limited = accepted.size > room
-        val toAdd = accepted.take(room)
-        if (toAdd.isEmpty()) {
-            _state.update { it.copy(batchLimitHit = true) }
-            return
-        }
+        if (accepted.isEmpty()) return
         // Keep read access after this process dies: the foreground service
         // compresses the file later, and a photo-picker grant is not permanent
         // unless we ask for it.
-        toAdd.forEach { uri ->
+        accepted.forEach { uri ->
             runCatching {
                 getApplication<Application>().contentResolver.takePersistableUriPermission(
                     uri,
@@ -102,12 +81,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
         }
-        val newPicks = toAdd.map { uri ->
+        val newPicks = accepted.map { uri ->
             PickedVideo(uri = uri, name = uri.lastPathSegment?.substringAfterLast('/') ?: "Video")
         }
-        _state.update {
-            it.copy(picks = it.picks + newPicks, batchLimitHit = limited, probing = true)
-        }
+        _state.update { it.copy(picks = it.picks + newPicks, probing = true) }
         viewModelScope.launch {
             newPicks.forEach { pick ->
                 val result = runCatching {
@@ -137,12 +114,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun removePick(uri: Uri) {
-        _state.update { state ->
-            state.copy(
-                picks = state.picks.filterNot { it.uri == uri },
-                batchLimitHit = false,
-            )
-        }
+        _state.update { state -> state.copy(picks = state.picks.filterNot { it.uri == uri }) }
     }
 
     fun selectPreset(preset: SizePreset) {
@@ -188,12 +160,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleQualityReport() {
-        if (!_state.value.proUnlocked) return
         _state.update { it.copy(measureQuality = !it.measureQuality) }
-    }
-
-    fun dismissBatchLimit() {
-        _state.update { it.copy(batchLimitHit = false) }
     }
 
     fun planFor(info: VideoInfo, state: HomeUiState = _state.value): EncodePlan =
@@ -202,7 +169,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             targetBytes = state.targetBytes,
             codec = state.codec,
             allowDownscale = state.allowDownscale,
-            maxShortSide = state.maxShortSide,
+            maxShortSide = null,
         )
 
     fun startCompression(onStarted: () -> Unit) {
@@ -215,7 +182,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             uris = ready.map { it.uri.toString() },
             targetBytes = current.targetBytes,
             codec = current.codec,
-            maxShortSide = current.maxShortSide,
+            maxShortSide = null,
             measureQuality = current.measureQuality,
             allowDownscale = current.allowDownscale,
         )
@@ -225,9 +192,5 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun resetStarted() {
         _state.update { it.copy(started = false) }
-    }
-
-    fun unlockPro() {
-        viewModelScope.launch { videoFit.pro.unlockPro() }
     }
 }

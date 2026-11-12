@@ -185,9 +185,13 @@ fun ResultScreen(
                         }
                         Spacer(Modifier.height(Space.md))
                         Text(
-                            text = "${primary.verdict.label} · ${if (primary.hitTarget) "target hit" else "slightly over target"} · ${primary.elapsedMs / 1000}s",
+                            text = if (primary.skipped) {
+                                "Already under target — copied unchanged · ${primary.elapsedMs / 1000}s"
+                            } else {
+                                "${primary.verdict.label} · ${if (primary.hitTarget) "target hit" else "slightly over target"} · ${primary.elapsedMs / 1000}s"
+                            },
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (primary.hitTarget) VF.Success else VF.Warning,
+                            color = if (primary.skipped || primary.hitTarget) VF.Success else VF.Warning,
                         )
                     }
                 }
