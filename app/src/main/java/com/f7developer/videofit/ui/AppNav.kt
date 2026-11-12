@@ -39,7 +39,10 @@ private object Routes {
 }
 
 @Composable
-fun AppNav(incomingUris: List<Uri> = emptyList()) {
+fun AppNav(
+    incomingUris: List<Uri> = emptyList(),
+    suggestedTargetMb: Int? = null,
+) {
     val app = LocalContext.current.applicationContext as VideoFitApp
     // null while DataStore is still reading: show the brand backdrop instead of
     // flashing onboarding for a returning user.
@@ -56,6 +59,7 @@ fun AppNav(incomingUris: List<Uri> = emptyList()) {
 
         else -> MainNav(
             incomingUris = incomingUris,
+            suggestedTargetMb = suggestedTargetMb,
             onReplayIntro = { scope.launch { app.settings.setOnboardingDone(false) } },
             libraryRepository = app.library,
             historyRepository = app.history,
@@ -66,6 +70,7 @@ fun AppNav(incomingUris: List<Uri> = emptyList()) {
 @Composable
 private fun MainNav(
     incomingUris: List<Uri>,
+    suggestedTargetMb: Int?,
     onReplayIntro: () -> Unit,
     libraryRepository: com.f7developer.videofit.core.data.LibraryRepository,
     historyRepository: com.f7developer.videofit.core.data.HistoryRepository,
@@ -85,6 +90,7 @@ private fun MainNav(
                     navController.navigate(Routes.PROGRESS) { launchSingleTop = true }
                 },
                 incomingUris = incomingUris,
+                suggestedTargetMb = suggestedTargetMb,
             )
         }
         composable(Routes.PROGRESS) {

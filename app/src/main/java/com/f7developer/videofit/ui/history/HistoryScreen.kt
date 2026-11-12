@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -40,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +59,8 @@ import com.f7developer.videofit.ui.theme.VF
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.content.FileProvider
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -73,6 +77,7 @@ fun HistoryScreen(
     onBack: () -> Unit,
     repository: HistoryRepository,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<HistoryEntry>>(emptyList()) }
     var query by remember { mutableStateOf("") }
@@ -113,6 +118,9 @@ fun HistoryScreen(
                 onBack = onBack,
                 action = {
                     if (entries.isNotEmpty()) {
+                        IconButton(onClick = { exportCsv(context, entries) }) {
+                            Icon(Icons.Rounded.IosShare, "Export CSV", tint = VF.TextSecondary, modifier = Modifier.size(20.dp))
+                        }
                         IconButton(onClick = { confirmClear = true }) {
                             Icon(Icons.Rounded.Delete, "Clear history", tint = VF.TextSecondary, modifier = Modifier.size(20.dp))
                         }
@@ -148,6 +156,10 @@ fun HistoryScreen(
                                         SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(it.at))
                                     } ?: "—",
                                 )
+                            }
+                            if (entries.isNotEmpty()) {
+                                Spacer(Modifier.height(Space.md))
+                                WeekChart(entries)
                             }
                         }
                     }
@@ -340,9 +352,76 @@ fun HistoryScreen(
 }
 
 @Composable
+private fun WeekChart(entries: List<HistoryEntry>) {
+    val days = remember(entries) {
+        val dayFormat = SimpleDateFormat("yyyyMMdd", Locale.US)
+        val labelFormat = SimpleDateFormat("EE", Locale.US)
+        (6 downTo 0).map { offset ->
+            val cal = java.util.Calendar.getInstance().apply {
+                add(java.util.Calendar.DAY_OF_YEAR, -offset)
+            }
+            val dayMs = cal.timeInMillis
+            val saved = entries
+                .filter { dayFormat.format(Date(it.at)) == dayFormat.format(Date(dayMs)) }
+                .sumOf { it.savedBytes }
+            labelFormat.format(Date(dayMs)).take(1) to saved
+        }
+    }
+    val max = days.maxOfOrNull { it.second }?.coerceAtLeast(1L) ?: 1L
+    Row(
+        Modifier.fillMaxWidth().height(64.dp),
+        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        days.forEach { (label, saved) ->
+            Column(
+                Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom,
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height((6 + 34 * (saved.toFloat() / max)).dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (saved > 0) VF.Accent else VF.Outline),
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(label, style = MaterialTheme.typography.labelSmall, color = VF.TextTertiary)
+            }
+        }
+    }
+}
+
+@Composable
 private fun MiniStat(label: String, value: String) {
     Column {
         Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = VF.TextTertiary, letterSpacing = 1.sp)
         Text(value, style = MaterialTheme.typography.titleMedium, color = VF.TextPrimary)
+    }
+}
+
+private fun exportCsv(context: android.content.Context, entries: List<HistoryEntry>) {
+    runCatching {
+        val header = "file,source_bytes,output_bytes,target_bytes,codec,width,height,ssim,verdict,seconds,timestamp,skipped,failed\n"
+        val body = entries.joinToString("\n") { e ->
+            listOf(
+                "\"${e.displayName.replace("\"", "'")}\"",
+                e.sourceBytes, e.outputBytes, e.targetBytes, e.codec,
+                e.width, e.height, e.ssim ?: "", "\"${e.verdict}\"",
+                e.elapsedMs / 1000,
+                SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(e.at)),
+                e.skipped, e.failed,
+            ).joinToString(",")
+        }
+        val file = File(com.f7developer.videofit.core.media.OutputStore.workingDirectory(context), "videofit-history.csv")
+        file.writeText(header + body)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/csv"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(android.content.Intent.createChooser(intent, "Export history"))
     }
 }

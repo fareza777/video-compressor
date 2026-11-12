@@ -45,6 +45,7 @@ data class CompressionResult(
     val ssim: Double?,
     val verdict: QualityAnalyzer.Verdict,
     val savedToGallery: Boolean,
+    val durationMs: Long = 0L,
     /** True when the source already fit the target and was copied untouched. */
     val skipped: Boolean = false,
 ) {
@@ -75,13 +76,33 @@ class CompressionEngine(private val context: Context) {
         codec: VideoCodec,
         allowDownscale: Boolean,
         maxShortSide: Int?,
-    ): EncodePlan = CompressionPlanner.plan(
-        info = info,
-        targetBytes = targetBytes,
-        codec = codec,
-        allowDownscale = allowDownscale,
-        maxShortSide = maxShortSide,
-    )
+    ): EncodePlan {
+        // Some devices have no H.265 encoder at all; fall back instead of failing
+        // at configure time.
+        val usableCodec = if (codec == VideoCodec.HEVC && !hasEncoder("video/hevc")) {
+            VideoCodec.H264
+        } else {
+            codec
+        }
+        val planned = CompressionPlanner.plan(
+            info = info,
+            targetBytes = targetBytes,
+            codec = usableCodec,
+            allowDownscale = allowDownscale,
+            maxShortSide = maxShortSide,
+        )
+        return if (usableCodec != codec) {
+            planned.copy(warnings = planned.warnings + com.f7developer.videofit.core.model.PlanWarning.HEVC_UNSUPPORTED)
+        } else {
+            planned
+        }
+    }
+
+    private fun hasEncoder(mime: String): Boolean = runCatching {
+        android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+            info.isEncoder && info.supportedTypes.any { it.equals(mime, ignoreCase = true) }
+        }
+    }.getOrDefault(true)
 
     suspend fun compress(
         job: CompressionJob,
@@ -109,6 +130,7 @@ class CompressionEngine(private val context: Context) {
                 ssim = 1.0,
                 verdict = QualityAnalyzer.Verdict.INDISTINGUISHABLE,
                 savedToGallery = false,
+                durationMs = info.durationMs,
                 skipped = true,
             )
         }
@@ -159,6 +181,7 @@ class CompressionEngine(private val context: Context) {
             ssim = qualitySample.ssim,
             verdict = qualitySample.verdict,
             savedToGallery = false,
+            durationMs = info.durationMs,
         )
     }
 

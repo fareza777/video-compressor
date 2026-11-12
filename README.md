@@ -107,6 +107,15 @@ added — see [`docs/PLAY_RELEASE.md`](docs/PLAY_RELEASE.md).
   filters, and can clear itself without touching the video files.
 * **Theme** — Light (default) / Dark / System, switchable live in Settings, with
   matching splash colours from `values/` and `values-night/`.
+* **Result** (`ui/result/FrameCompare.kt`) — the same frame from source and output
+  behind a draggable divider, so the quality cost is visible instead of claimed.
+* **Plan budget** — the home plan strip splits the target into video and audio
+  bitrate so the estimate is explainable, and suggests H.265 when the target is
+  too tight for H.264.
+* **Share-sheet targets** — a video shared from WhatsApp, Gmail, Instagram or
+  Telegram opens with that app's upload limit already selected.
+* **Storage** — Library can free space by deleting every output at once, and
+  History exports the run log as CSV through the system share sheet.
 
 ## Open-source notice
 

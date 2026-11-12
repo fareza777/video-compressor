@@ -114,28 +114,17 @@ fun ResultScreen(
 
             if (primary != null) {
                 Spacer(Modifier.height(Space.lg))
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "BEFORE",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = VF.TextTertiary,
-                            letterSpacing = 1.2.sp,
-                        )
-                        Spacer(Modifier.height(Space.xs))
-                        VideoBox(uri = Uri.parse(primary.sourceUriString))
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "AFTER",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = VF.Accent,
-                            letterSpacing = 1.2.sp,
-                        )
-                        Spacer(Modifier.height(Space.xs))
-                        VideoBox(uri = Uri.fromFile(primary.outputFile))
-                    }
-                }
+                FrameCompare(
+                    source = Uri.parse(primary.sourceUriString),
+                    output = Uri.fromFile(primary.outputFile),
+                    durationMs = primary.durationMs,
+                )
+                Spacer(Modifier.height(Space.xs))
+                Text(
+                    "Drag the divider to compare the same frame",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VF.TextTertiary,
+                )
 
                 Spacer(Modifier.height(Space.lg))
                 VFCard(Modifier.fillMaxWidth(), backgroundColor = VF.SurfaceElevated) {

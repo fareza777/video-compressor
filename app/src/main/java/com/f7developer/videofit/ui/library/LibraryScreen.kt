@@ -102,6 +102,7 @@ fun LibraryScreen(
     var sort by remember { mutableStateOf(LibrarySort.NEWEST) }
     var playing by remember { mutableStateOf<LibraryItem?>(null) }
     var pendingDelete by remember { mutableStateOf<LibraryItem?>(null) }
+    var confirmWipe by remember { mutableStateOf(false) }
 
     suspend fun refresh() {
         loading = true
@@ -152,28 +153,38 @@ fun LibraryScreen(
                             )
                             if (items.isNotEmpty()) {
                                 Spacer(Modifier.height(Space.sm))
-                                Text(
-                                    "Save all to gallery",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = VF.Accent,
-                                    modifier = Modifier
-                                        .clickable {
-                                            scope.launch {
-                                                var saved = 0
-                                                withContext(Dispatchers.IO) {
-                                                    items.forEach {
-                                                        if (OutputStore.saveToGallery(context, it.file, it.name)) saved++
+                                Row(horizontalArrangement = Arrangement.spacedBy(Space.lg)) {
+                                    Text(
+                                        "Save all to gallery",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = VF.Accent,
+                                        modifier = Modifier
+                                            .clickable {
+                                                scope.launch {
+                                                    var saved = 0
+                                                    withContext(Dispatchers.IO) {
+                                                        items.forEach {
+                                                            if (OutputStore.saveToGallery(context, it.file, it.name)) saved++
+                                                        }
                                                     }
+                                                    Toast.makeText(
+                                                        context,
+                                                        "$saved of ${items.size} saved to Movies/VideoFit",
+                                                        Toast.LENGTH_SHORT,
+                                                    ).show()
                                                 }
-                                                Toast.makeText(
-                                                    context,
-                                                    "$saved of ${items.size} saved to Movies/VideoFit",
-                                                    Toast.LENGTH_SHORT,
-                                                ).show()
                                             }
-                                        }
-                                        .padding(vertical = Space.xs),
-                                )
+                                            .padding(vertical = Space.xs),
+                                    )
+                                    Text(
+                                        "Free up space",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = VF.Danger,
+                                        modifier = Modifier
+                                            .clickable { confirmWipe = true }
+                                            .padding(vertical = Space.xs),
+                                    )
+                                }
                             }
                         }
                     }
@@ -219,6 +230,18 @@ fun LibraryScreen(
                                 onClick = { sort = option },
                             )
                         }
+                    }
+                }
+
+                if (loading) {
+                    items(3) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(96.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(VF.SurfaceElevated),
+                        )
                     }
                 }
 
@@ -330,6 +353,27 @@ fun LibraryScreen(
 
     playing?.let { item ->
         PlayerDialog(item = item, onDismiss = { playing = null })
+    }
+
+    if (confirmWipe) {
+        AlertDialog(
+            onDismissRequest = { confirmWipe = false },
+            title = { Text("Delete all ${items.size} files?") },
+            text = { Text("They are removed from the app. Anything already saved to the gallery stays there.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) { items.forEach { repository.delete(it) } }
+                        confirmWipe = false
+                        refresh()
+                    }
+                }) { Text("Delete all", color = VF.Danger) }
+            },
+            dismissButton = { TextButton(onClick = { confirmWipe = false }) { Text("Cancel") } },
+            containerColor = VF.Surface,
+            titleContentColor = VF.TextPrimary,
+            textContentColor = VF.TextSecondary,
+        )
     }
 
     pendingDelete?.let { item ->

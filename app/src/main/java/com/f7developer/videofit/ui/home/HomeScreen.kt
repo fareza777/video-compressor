@@ -50,11 +50,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -87,6 +90,7 @@ fun HomeScreen(
     onOpenHistory: () -> Unit,
     onStart: () -> Unit,
     incomingUris: List<android.net.Uri> = emptyList(),
+    suggestedTargetMb: Int? = null,
     viewModel: HomeViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -99,7 +103,17 @@ fun HomeScreen(
         if (incomingUris.isNotEmpty()) viewModel.addUris(incomingUris)
     }
 
+    // Shared from WhatsApp/Gmail/Instagram: start on that app's upload limit.
+    var appliedSuggestion by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(suggestedTargetMb) {
+        if (suggestedTargetMb != null && !appliedSuggestion) {
+            viewModel.setTargetMegabytes(suggestedTargetMb)
+            appliedSuggestion = true
+        }
+    }
+
     val plan = state.firstInfo?.let { viewModel.planFor(it, state) }
+    val haptics = LocalHapticFeedback.current
     val launchPicker = {
         picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
     }
@@ -173,7 +187,10 @@ fun HomeScreen(
 
             if (plan != null) {
                 Spacer(Modifier.height(Space.md))
-                PlanStrip(plan = plan)
+                PlanStrip(
+                    plan = plan,
+                    onUseHevc = { viewModel.setCodec(VideoCodec.HEVC) },
+                )
             }
             Spacer(Modifier.height(Space.lg))
         }
@@ -196,7 +213,14 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .padding(horizontal = Space.lg, vertical = Space.sm),
                 enabled = state.picks.isEmpty() || state.ready,
-                onClick = { if (count == 0) launchPicker() else viewModel.startCompression(onStart) },
+                onClick = {
+                    if (count == 0) {
+                        launchPicker()
+                    } else {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.startCompression(onStart)
+                    }
+                },
             )
             BannerAdSlot()
         }
@@ -550,36 +574,90 @@ private fun EncodeRow(
 }
 
 @Composable
-private fun PlanStrip(plan: EncodePlan) {
-    Row(
+private fun PlanStrip(plan: EncodePlan, onUseHevc: () -> Unit) {
+    val squeeze = plan.codec == VideoCodec.H264 && plan.warnings.any {
+        it == com.f7developer.videofit.core.model.PlanWarning.LOW_BITRATE ||
+            it == com.f7developer.videofit.core.model.PlanWarning.INFEASIBLE
+    }
+    Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(VF.SurfaceElevated)
             .padding(horizontal = Space.md, vertical = Space.md),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = plan.resolutionLabel,
+                style = MaterialTheme.typography.titleMedium,
+                color = VF.Accent,
+                fontWeight = FontWeight.Bold,
+            )
+            Dot()
+            Text(
+                "≈ ${Format.megabytes(plan.estimatedBytes)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = VF.TextSecondary,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = plan.codec.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = VF.TextTertiary,
+            )
+        }
+
+        // Where the bytes go: video is the budget, audio is fixed, the rest is overhead.
+        Spacer(Modifier.height(Space.sm))
+        val totalKbps = (plan.videoKbps + plan.audioKbps).coerceAtLeast(1)
+        val videoFraction = (plan.videoKbps.toFloat() / totalKbps).coerceIn(0.05f, 1f)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(50))
+                .background(VF.Outline),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(videoFraction)
+                    .fillMaxSize()
+                    .background(VF.Accent),
+            )
+            Box(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxWidth(1f - videoFraction)
+                    .fillMaxSize()
+                    .background(VF.Success.copy(alpha = 0.8f)),
+            )
+        }
+        Spacer(Modifier.height(4.dp))
         Text(
-            text = plan.resolutionLabel,
-            style = MaterialTheme.typography.titleMedium,
-            color = VF.Accent,
-            fontWeight = FontWeight.Bold,
-        )
-        Dot()
-        Text(
-            "≈ ${Format.megabytes(plan.estimatedBytes)}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = VF.TextSecondary,
-        )
-        Spacer(Modifier.weight(1f))
-        Text(
-            text = plan.codec.label,
-            style = MaterialTheme.typography.labelMedium,
+            "Video ${plan.videoKbps} kbps · Audio ${plan.audioKbps} kbps",
+            style = MaterialTheme.typography.labelSmall,
             color = VF.TextTertiary,
         )
-        if (plan.warnings.isNotEmpty()) {
-            Spacer(Modifier.width(Space.sm))
-            Text("!", style = MaterialTheme.typography.labelLarge, color = VF.Warning)
+
+        if (squeeze) {
+            Spacer(Modifier.height(Space.sm))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Tight target — H.265 keeps about 30% more detail.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VF.Warning,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "Switch",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = VF.Accent,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable(onClick = onUseHevc)
+                        .padding(horizontal = Space.sm, vertical = 2.dp),
+                )
+            }
         }
     }
 }

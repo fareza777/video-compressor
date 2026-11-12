@@ -41,6 +41,7 @@ enum class PlanWarning(val message: String) {
     RESOLUTION_CAP("Output resolution is limited on the free plan."),
     FPS_REDUCED("Frame rate reduced to keep detail at this size."),
     AUDIO_DROPPED("Audio will be removed."),
+    HEVC_UNSUPPORTED("No H.265 encoder on this device; H.264 is used instead."),
 }
 
 /** A destination cap, e.g. WhatsApp's 16 MB. */

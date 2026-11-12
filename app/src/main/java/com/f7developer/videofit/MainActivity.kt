@@ -32,14 +32,30 @@ class MainActivity : ComponentActivity() {
             ),
         )
         val incoming = extractVideoUris(intent)
+        val suggestedTarget = suggestedTargetMb()
         val app = application as VideoFitApp
 
         setContent {
             val settings by app.settings.settings.collectAsStateWithLifecycle(initialValue = null)
             // Light is the default until the stored preference arrives.
             VideoFitTheme(mode = settings?.themeMode ?: ThemeMode.LIGHT) {
-                AppNav(incomingUris = incoming)
+                AppNav(incomingUris = incoming, suggestedTargetMb = suggestedTarget)
             }
+        }
+    }
+
+    /**
+     * When a video is shared from WhatsApp/Gmail/Instagram, start with that
+     * app's upload limit already selected.
+     */
+    private fun suggestedTargetMb(): Int? {
+        val source = runCatching { referrer?.host }.getOrNull() ?: return null
+        return when {
+            source.contains("whatsapp", true) -> 16
+            source.contains("gm", true) || source.contains("gmail", true) -> 18
+            source.contains("instagram", true) -> 25
+            source.contains("telegram", true) -> 20
+            else -> null
         }
     }
 
